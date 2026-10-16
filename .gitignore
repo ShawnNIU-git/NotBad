@@ -15,3 +15,9 @@ xcuserdata/
 DerivedData/
 *.xcuserstate
 .DS_Store
+
+# 由 xcodegen 生成
+ios/NotBad.xcodeproj/
+# SwiftPM
+.build/
+.swiftpm/
