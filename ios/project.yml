@@ -1,0 +1,44 @@
+# XcodeGen 配置：在 Mac 上执行 `brew install xcodegen && xcodegen` 生成 NotBad.xcodeproj
+name: NotBad
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: zh-Hans
+
+packages:
+  NotBadCore:
+    path: NotBadCore
+
+targets:
+  NotBad:
+    type: application
+    platform: iOS
+    sources:
+      - NotBad
+    dependencies:
+      - package: NotBadCore
+    scheme: {}
+    info:
+      path: NotBad/Info.plist
+      properties:
+        CFBundleDisplayName: 错题本
+        CFBundleDevelopmentRegion: zh-Hans
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: 用于拍摄试卷，照片只保存在本机。
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.notbad  # 改成你自己的 Bundle ID
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_PREVIEWS: YES
+        DEVELOPMENT_TEAM: ""  # 填你的 Team ID，或在 Xcode 的 Signing 页面选择

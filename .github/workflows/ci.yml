@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  recognition:
+    name: 识别原型（Python）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: recognition
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+
+  ios:
+    name: iOS（核心库测试 + App 编译）
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: 核心库单元测试
+        run: swift test
+        working-directory: ios/NotBadCore
+      - name: 生成 Xcode 工程
+        run: |
+          brew install xcodegen
+          xcodegen
+      - name: 编译 App（模拟器，不签名）
+        run: |
+          xcodebuild build \
+            -project NotBad.xcodeproj \
+            -scheme NotBad \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
