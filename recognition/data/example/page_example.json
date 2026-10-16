@@ -1,0 +1,36 @@
+{
+  "subject": "数学",
+  "questions": [
+    {
+      "number": "1",
+      "bbox": [60, 120, 940, 210],
+      "text": "计算：$3 + 4 \\times 2 = $",
+      "has_figure": false,
+      "student_answer": "14",
+      "teacher_mark": "wrong",
+      "is_wrong": true,
+      "confidence": 1.0
+    },
+    {
+      "number": "2",
+      "bbox": [60, 220, 940, 330],
+      "text": "解方程：$2x - 5 = 7$",
+      "has_figure": false,
+      "student_answer": "x = 6",
+      "teacher_mark": "correct",
+      "is_wrong": false,
+      "confidence": 1.0
+    },
+    {
+      "number": "二.1",
+      "bbox": [60, 360, 940, 620],
+      "text": "如图，在 $\\triangle ABC$ 中，$\\angle C = 90^\\circ$，$AC = 3$，$BC = 4$，求 $AB$ 的长。",
+      "has_figure": true,
+      "student_answer": "AB = 5",
+      "teacher_mark": "none",
+      "is_wrong": false,
+      "confidence": 1.0
+    }
+  ],
+  "notes": ""
+}
