@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# 识别原型的数据与输出：真实试卷含学生个人信息，不进仓库
+recognition/data/images/
+recognition/data/labels/
+recognition/out/
+!recognition/data/example/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.DS_Store
