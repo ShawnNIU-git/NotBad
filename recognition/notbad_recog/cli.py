@@ -3,6 +3,7 @@
   notbad-recog probe    --model kimi-k3 --model qwen3.8-max   测试哪些模型能看图
   notbad-recog analyze  data/images/*.jpg -o out              识别试卷，输出 JSON、切题图和标注图
   notbad-recog evaluate data/labels out/preds                  对比标注，算准确率
+  notbad-recog solve    out                                    为 analyze 找出的错题生成答案
 """
 
 from __future__ import annotations
@@ -131,6 +132,39 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def cmd_solve(args: argparse.Namespace) -> int:
+    """读取 analyze 的输出，为错题（--all 时为全部题）生成标准答案，写入 out/solutions/。"""
+    from .client import VisionClient
+
+    config = Config.from_env(args.model)
+    client = VisionClient(config)
+    out = Path(args.out)
+    solutions_dir = out / "solutions"
+    solutions_dir.mkdir(parents=True, exist_ok=True)
+
+    failures = 0
+    for pred_path in sorted((out / "preds").glob("*.json")):
+        page = PageResult.from_dict(json.loads(pred_path.read_text(encoding="utf-8")))
+        results = {}
+        for i, q in enumerate(page.questions):
+            if not (q.is_wrong or args.all):
+                continue
+            crop_path = out / "crops" / pred_path.stem / f"{_safe_name(q.number, i)}.jpg"
+            if not crop_path.exists():
+                print(f"缺少裁剪图 {crop_path}", file=sys.stderr)
+                continue
+            try:
+                solution, _ = client.solve_question(load_image(crop_path), q.text, page.subject, q.student_answer)
+            except Exception as e:  # noqa: BLE001 - 单题失败不影响其他题
+                failures += 1
+                print(f"失败 {pred_path.stem} 第 {q.number} 题: {e}", file=sys.stderr)
+                continue
+            results[q.number] = solution.to_dict()
+            print(f"{pred_path.stem} 第 {q.number} 题: {solution.answer[:40]} (置信度 {solution.confidence:.2f})")
+        (solutions_dir / pred_path.name).write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    return 1 if failures else 0
+
+
 def cmd_evaluate(args: argparse.Namespace) -> int:
     report = evaluate_dirs(Path(args.labels), Path(args.preds))
     summary = report.summary()
@@ -171,6 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("preds", help="模型输出 JSON 目录（analyze 的 out/preds）")
     p.add_argument("--per-page", action="store_true")
     p.set_defaults(func=cmd_evaluate)
+    p = sub.add_parser("solve", help="为错题生成标准答案和解析")
+    p.add_argument("out", help="analyze 的输出目录")
+    p.add_argument("--model", help="解题模型，可与识别模型不同")
+    p.add_argument("--all", action="store_true", help="为全部题目生成，而不只是错题")
+    p.set_defaults(func=cmd_solve)
     return parser
 
 

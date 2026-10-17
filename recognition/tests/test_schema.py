@@ -36,3 +36,24 @@ def test_parse_normalizes_fields():
 def test_bad_bbox_raises():
     with pytest.raises(ValueError):
         parse_model_output('{"questions": [{"number": "1", "bbox": [1, 2, 3]}]}')
+
+
+def test_parse_paper_info_and_knowledge_points():
+    result = parse_model_output(
+        '{"subject": "数学", "title": " 第三单元测试 ", "paper_type": "单元测试", "grade": null,'
+        ' "questions": [{"number": "1", "bbox": [0,0,1,1], "knowledge_points": ["方程", "", 3]}]}'
+    )
+    assert result.title == "第三单元测试"
+    assert result.paper_type == "单元测试"
+    assert result.grade == ""
+    assert result.questions[0].knowledge_points == ["方程", "3"]
+
+
+def test_parse_solution():
+    from notbad_recog.schema import parse_solution
+
+    s = parse_solution('```json\n{"answer": "x=6", "explanation": "移项", "knowledge_points": "bad", "confidence": 0.7}\n```')
+    assert s.answer == "x=6"
+    assert s.knowledge_points == []
+    assert s.common_mistake == ""
+    assert s.confidence == 0.7
