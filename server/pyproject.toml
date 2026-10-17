@@ -1,0 +1,24 @@
+[project]
+name = "notbad-server"
+version = "0.1.0"
+description = "NotBad 中转后端：接收 App 上传的图片，转发给模型服务商，做会员鉴权和限流"
+requires-python = ">=3.10"
+dependencies = [
+    "notbad-recog",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["notbad_server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
