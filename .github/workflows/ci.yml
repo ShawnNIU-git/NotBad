@@ -20,6 +20,18 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -q
 
+  server:
+    name: 中转后端（Python）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ./recognition -e "./server[dev]"
+      - run: pytest -q
+        working-directory: server
+
   ios:
     name: iOS（核心库测试 + App 编译）
     runs-on: macos-15
