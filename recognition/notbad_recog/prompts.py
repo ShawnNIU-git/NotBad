@@ -1,35 +1,36 @@
-"""给视觉模型的提示词。改提示词后要重新跑评测，对比准确率。"""
+"""给视觉模型的提示词。改提示词后要重新跑评测，对比准确率。
 
-SYSTEM_PROMPT = """你是中小学试卷分析助手。输入是一张拍摄的试卷照片（可能有倾斜、阴影、折痕）。
-你的任务：把试卷切分成一道道题，识别每道题的内容、学生作答和老师批改痕迹，判断哪些题做错了。
-
-只输出一个 JSON 对象，不要输出任何其他文字，格式如下：
-{
-  "subject": "数学/语文/英语/物理/化学/其他",
-  "questions": [
-    {
-      "number": "题号，按卷面原样，如 \\"3\\" 或 \\"二.1\\"",
-      "bbox": [x0, y0, x1, y1],
-      "text": "题干原文，数学公式用 LaTeX 写在 $...$ 中",
-      "has_figure": false,
-      "student_answer": "学生手写的作答内容，没有则为空字符串",
-      "teacher_mark": "correct | wrong | partial | none",
-      "is_wrong": false,
-      "confidence": 0.9
-    }
-  ],
-  "notes": "无法确定的情况简要说明"
-}
-
-规则：
-1. bbox 是该题完整区域（含题干、配图、作答区）在图中的位置，坐标归一化到 0-1000，左上角为原点。
-2. teacher_mark：红叉、圈、扣分（如 -2）记为 wrong；对勾记为 correct；半对或部分扣分记为 partial；没有批改痕迹记为 none。
-3. is_wrong：有 wrong 或 partial 批改痕迹时为 true；没有批改痕迹时，只有你非常确定学生答案错误才为 true。
-4. confidence 是你对 is_wrong 判断的把握，0 到 1。
-5. 大题含多个小题时，每个小题单独列出，题号写成 "大题号.小题号"。
-6. 忽略姓名、学校、班级、考号等个人信息，不要写进任何字段。
+系统提示词放在仓库的 shared/prompts/ 下，Python 和 iOS App 共用同一份。
+部署时可用环境变量 NOTBAD_PROMPTS_DIR 指定目录。
 """
+
+import os
+from pathlib import Path
+
+PROMPTS_DIR = Path(
+    os.environ.get("NOTBAD_PROMPTS_DIR", Path(__file__).resolve().parents[2] / "shared" / "prompts")
+)
+
+
+def load_prompt(name: str) -> str:
+    return (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+
+
+SYSTEM_PROMPT = load_prompt("analyze_page")
+SOLVE_PROMPT = load_prompt("solve_question")
 
 USER_PROMPT = "请分析这张试卷照片，按要求输出 JSON。"
 
 PROBE_PROMPT = "图片里有一个彩色几何图形。请只回答它的颜色和形状，例如“红色圆形”。"
+
+
+def solve_user_prompt(text: str, subject: str = "", student_answer: str = "") -> str:
+    """解题请求的用户消息。与 iOS 端 Prompts.solveUserPrompt 保持一致。"""
+    lines = []
+    if subject:
+        lines.append(f"学科：{subject}")
+    lines.append(f"识别出的题干：{text or '（未识别，请看图片）'}")
+    if student_answer:
+        lines.append(f"学生的错误答案：{student_answer}")
+    lines.append("请按要求输出 JSON。")
+    return "\n".join(lines)

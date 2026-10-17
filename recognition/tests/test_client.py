@@ -56,3 +56,20 @@ def test_anthropic_style_request_and_parse():
     assert "system" in captured["body"]
     assert captured["body"]["messages"][0]["content"][0]["type"] == "image"
     assert result.subject == "数学"
+
+
+def test_solve_question_uses_solve_prompt_and_model_override():
+    captured = {}
+    reply = {"choices": [{"message": {"content": '{"answer": "11", "explanation": "先乘后加", "confidence": 0.95}'}}]}
+    client = make_client("openai", reply, captured)
+
+    solution, _ = client.solve_question(
+        Image.new("RGB", (50, 50)), text="3+4×2=", subject="数学", student_answer="14", model="solver"
+    )
+
+    body = captured["body"]
+    assert body["model"] == "solver"
+    assert "标准答案" in body["messages"][0]["content"]
+    user_text = body["messages"][1]["content"][1]["text"]
+    assert "3+4×2=" in user_text and "14" in user_text and "数学" in user_text
+    assert solution.answer == "11"
