@@ -1,10 +1,13 @@
 import NotBadCore
 import SwiftUI
 
-/// 在试卷图片上手动框选错题：拖动画框，点框删除。
+/// 确认页上的试卷图：
+/// - 红框：要保存的错题（模型判错或用户选中）；橙框：模型判错但把握不大
+/// - 灰色虚线框：模型识别出的其他题，点一下改为错题
+/// - 拖动画新框补漏；点手动画的框删除
 struct CropSelectionView: View {
     let image: UIImage
-    @Binding var boxes: [NormalizedBox]
+    @Binding var boxes: [DraftBox]
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
@@ -18,21 +21,12 @@ struct CropSelectionView: View {
                     .scaledToFit()
                     .frame(width: geo.size.width, height: geo.size.height)
 
-                ForEach(Array(boxes.enumerated()), id: \.offset) { index, box in
-                    let rect = viewRect(for: box, in: frame)
-                    Rectangle()
-                        .fill(Color.red.opacity(0.12))
-                        .overlay(Rectangle().stroke(Color.red, lineWidth: 2))
-                        .overlay(alignment: .topLeading) {
-                            Text("\(index + 1)")
-                                .font(.caption.bold())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .background(Color.red)
-                        }
-                        .frame(width: rect.width, height: rect.height)
-                        .offset(x: rect.minX, y: rect.minY)
-                        .onTapGesture { boxes.remove(at: index) }
+                // 未选中的画在下面，避免挡住错题框
+                ForEach(boxes.filter { !$0.isSelected }) { draft in
+                    boxView(draft, rect: viewRect(for: draft.box, in: frame))
+                }
+                ForEach(boxes.filter(\.isSelected)) { draft in
+                    boxView(draft, rect: viewRect(for: draft.box, in: frame))
                 }
 
                 if let start = dragStart, let current = dragCurrent {
@@ -52,11 +46,42 @@ struct CropSelectionView: View {
                     }
                     .onEnded { value in
                         let box = normalizedBox(from: value.startLocation, to: value.location, in: frame)
-                        if box.isUsable() { boxes.append(box) }
+                        if box.isUsable() { boxes.append(DraftBox(box: box, isSelected: true)) }
                         dragStart = nil
                         dragCurrent = nil
                     }
             )
+        }
+    }
+
+    private func boxView(_ draft: DraftBox, rect: CGRect) -> some View {
+        let color: Color = draft.isSelected ? (draft.needsReview ? .orange : .red) : .gray
+        return Rectangle()
+            .fill(color.opacity(draft.isSelected ? 0.12 : 0.04))
+            .overlay(
+                Rectangle().stroke(color, style: StrokeStyle(lineWidth: draft.isSelected ? 2 : 1,
+                                                             dash: draft.isSelected ? [] : [4]))
+            )
+            .overlay(alignment: .topLeading) {
+                if let number = draft.question?.number, !number.isEmpty {
+                    Text(number)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 3)
+                        .background(color)
+                }
+            }
+            .frame(width: rect.width, height: rect.height)
+            .offset(x: rect.minX, y: rect.minY)
+            .onTapGesture { toggle(draft) }
+    }
+
+    private func toggle(_ draft: DraftBox) {
+        guard let index = boxes.firstIndex(where: { $0.id == draft.id }) else { return }
+        if draft.isManual {
+            boxes.remove(at: index)
+        } else {
+            boxes[index].isSelected.toggle()
         }
     }
 

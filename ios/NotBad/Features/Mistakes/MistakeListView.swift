@@ -64,6 +64,7 @@ struct MistakeListView: View {
         for index in offsets {
             let mistake = filtered[index]
             ImageStore.delete(mistake.cropFileName)
+            // 原图属于试卷，删除试卷时才删
             modelContext.delete(mistake)
         }
     }
@@ -78,11 +79,16 @@ private struct MistakeRow: View {
                 .frame(width: 72, height: 54)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 4) {
-                Text(mistake.recognizedText.isEmpty ? "第 \(mistake.questionNumber) 题" : mistake.recognizedText)
+                Text(mistake.recognizedText.isEmpty ? "第 \(mistake.questionNumber) 题" : MathText.plain(mistake.recognizedText))
                     .lineLimit(2)
                     .font(.subheadline)
                 HStack(spacing: 6) {
                     Text(mistake.subject.title)
+                    if mistake.answerStatus == .pending || mistake.answerStatus == .generating {
+                        Image(systemName: "hourglass")
+                    } else if mistake.answerStatus == .done {
+                        Image(systemName: "lightbulb")
+                    }
                     ForEach(MistakeCause.allCases.filter(mistake.causes.contains)) { cause in
                         Text(cause.title)
                     }

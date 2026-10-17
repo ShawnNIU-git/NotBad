@@ -148,3 +148,17 @@ final class ReviewSchedulerTests: XCTestCase {
         XCTAssertEqual(s.ease, 2.35, accuracy: 1e-9)
     }
 }
+
+final class CatalogTests: XCTestCase {
+    func testMistakeSourceFromQuestion() {
+        let box = NormalizedBox(x0: 0, y0: 0, x1: 1, y1: 1)
+        XCTAssertEqual(MistakeSource(question: RecognizedQuestion(number: "1", bbox: box, teacherMark: .wrong)), .teacherMark)
+        XCTAssertEqual(MistakeSource(question: RecognizedQuestion(number: "1", bbox: box, teacherMark: .partial)), .teacherMark)
+        XCTAssertEqual(MistakeSource(question: RecognizedQuestion(number: "1", bbox: box, teacherMark: .none)), .aiGraded)
+    }
+
+    func testSubjectFromModelTitle() {
+        XCTAssertEqual(Subject(title: "物理"), .physics)
+        XCTAssertEqual(Subject(title: "生物"), .other)
+    }
+}

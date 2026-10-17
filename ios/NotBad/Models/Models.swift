@@ -8,7 +8,10 @@ final class Paper {
     var id: UUID
     var createdAt: Date
     var subjectRaw: String
+    /// 试卷标题，识别不到时为空，界面上显示为"未命名试卷"
     var title: String
+    var paperType: String = ""
+    var grade: String = ""
     /// 每页原图在 ImageStore 中的文件名
     var pageFileNames: [String]
 
@@ -26,6 +29,10 @@ final class Paper {
     var subject: Subject {
         get { Subject(rawValue: subjectRaw) ?? .other }
         set { subjectRaw = newValue.rawValue }
+    }
+
+    var displayTitle: String {
+        title.isEmpty ? "未命名试卷 · \(createdAt.formatted(date: .abbreviated, time: .omitted))" : title
     }
 }
 
@@ -53,6 +60,16 @@ final class Mistake {
     var causeRaws: [String] = []
     var sourceRaw: String
     var confidence: Double = 1
+    var teacherMarkRaw: String = TeacherMark.none.rawValue
+    var knowledgePoints: [String] = []
+
+    // AI 生成的标准答案（仅供参考，用户可"采用"到 correctAnswer）
+    var aiAnswer: String = ""
+    var aiExplanation: String = ""
+    var aiCommonMistake: String = ""
+    var aiConfidence: Double = 0
+    var answerStatusRaw: String = AnswerStatus.none.rawValue
+    var answerError: String = ""
 
     // 复习进度（ReviewState 拆成平铺字段，方便 SwiftData 排序和查询）
     var reviewDue: Date
@@ -91,6 +108,33 @@ final class Mistake {
     }
 
     var source: MistakeSource { MistakeSource(rawValue: sourceRaw) ?? .manual }
+
+    var teacherMark: TeacherMark { TeacherMark(rawValue: teacherMarkRaw) ?? TeacherMark.none }
+
+    var answerStatus: AnswerStatus {
+        get { AnswerStatus(rawValue: answerStatusRaw) ?? AnswerStatus.none }
+        set { answerStatusRaw = newValue.rawValue }
+    }
+
+    /// 复习时显示的答案：优先用户自己写的，其次 AI 生成的。
+    var displayAnswer: (text: String, isAI: Bool)? {
+        if !correctAnswer.isEmpty { return (correctAnswer, false) }
+        if !aiAnswer.isEmpty {
+            let text = aiExplanation.isEmpty ? aiAnswer : "\(aiAnswer)\n\n\(aiExplanation)"
+            return (text, true)
+        }
+        return nil
+    }
+
+    func apply(_ solution: Solution) {
+        aiAnswer = solution.answer
+        aiExplanation = solution.explanation
+        aiCommonMistake = solution.commonMistake
+        aiConfidence = solution.confidence
+        if knowledgePoints.isEmpty { knowledgePoints = solution.knowledgePoints }
+        answerStatus = .done
+        answerError = ""
+    }
 
     var causes: Set<MistakeCause> {
         get { Set(causeRaws.compactMap(MistakeCause.init(rawValue:))) }

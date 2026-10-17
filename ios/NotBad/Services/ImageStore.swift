@@ -64,3 +64,10 @@ extension UIImage {
         return UIImage(cgImage: cropped)
     }
 }
+
+extension UIImage {
+    /// 上传给模型的 JPEG：缩小到 maxSide 以内，减少流量和费用。
+    func jpegForUpload(maxSide: CGFloat = 2048, quality: CGFloat = 0.8) -> Data? {
+        normalizedForStorage(maxSide: maxSide).jpegData(compressionQuality: quality)
+    }
+}

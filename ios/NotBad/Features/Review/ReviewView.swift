@@ -54,6 +54,9 @@ struct ReviewView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
+                    if !mistake.recognizedText.isEmpty {
+                        MathText(text: mistake.recognizedText)
+                    }
                     if revealed {
                         answerSection(for: mistake)
                     }
@@ -87,8 +90,17 @@ struct ReviewView: View {
         if !mistake.studentAnswer.isEmpty {
             LabeledText(title: "当时的答案", text: mistake.studentAnswer)
         }
-        LabeledText(title: "正确答案与解析",
-                    text: mistake.correctAnswer.isEmpty ? "还没有填写，可在错题详情里补充。" : mistake.correctAnswer)
+        if let answer = mistake.displayAnswer {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(answer.isAI ? "标准答案（AI 生成，仅供参考）" : "正确答案与解析")
+                    .font(.caption).foregroundStyle(.secondary)
+                MathText(text: answer.text)
+            }
+        } else {
+            LabeledText(title: "正确答案与解析",
+                        text: mistake.answerStatus == .pending || mistake.answerStatus == .generating
+                            ? "答案正在生成中…" : "还没有答案，可在错题详情里补充。")
+        }
         if !mistake.causes.isEmpty {
             LabeledText(title: "错因",
                         text: MistakeCause.allCases.filter(mistake.causes.contains).map(\.title).joined(separator: "、"))

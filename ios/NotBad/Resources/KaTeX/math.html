@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="katex.min.css">
+<script src="katex.min.js"></script>
+<script src="contrib/auto-render.min.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { font: -apple-system-body; font-family: -apple-system, "PingFang SC", sans-serif;
+         color: CanvasText; line-height: 1.6; word-wrap: break-word; -webkit-text-size-adjust: 100%; }
+  #content { white-space: pre-wrap; }
+  .katex-display { margin: 0.4em 0; overflow-x: auto; overflow-y: hidden; }
+</style>
+</head>
+<body>
+<div id="content"></div>
+<script>
+  function reportHeight() {
+    window.webkit.messageHandlers.height.postMessage(document.getElementById("content").scrollHeight);
+  }
+  // 由原生代码调用：显示一段混合文字和 $...$ 公式的内容
+  function render(text) {
+    var el = document.getElementById("content");
+    el.textContent = text;
+    renderMathInElement(el, {
+      delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false},
+        {left: "\\(", right: "\\)", display: false},
+        {left: "\\[", right: "\\]", display: true}
+      ],
+      throwOnError: false
+    });
+    reportHeight();
+    // 字体加载完后高度可能变化
+    if (document.fonts) { document.fonts.ready.then(reportHeight); }
+  }
+  window.addEventListener("resize", reportHeight);
+</script>
+</body>
+</html>

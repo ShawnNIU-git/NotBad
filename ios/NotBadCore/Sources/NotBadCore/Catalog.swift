@@ -47,3 +47,27 @@ public enum MistakeSource: String, Codable, Sendable {
     case teacherMark   // 识别老师批改痕迹
     case aiGraded      // AI 判题
 }
+
+/// 试卷类型，与提示词里的 paper_type 取值一致。
+public enum PaperType {
+    public static let all = ["单元测试", "期中", "期末", "作业", "练习", "其他"]
+}
+
+/// AI 答案的生成状态。
+public enum AnswerStatus: String, Codable, Sendable {
+    case none        // 不生成（未配置识别服务）
+    case pending     // 排队中
+    case generating
+    case done
+    case failed
+}
+
+public extension MistakeSource {
+    /// 根据模型识别结果判断错题来源。
+    init(question: RecognizedQuestion) {
+        switch question.teacherMark {
+        case .wrong, .partial: self = .teacherMark
+        default: self = .aiGraded
+        }
+    }
+}
