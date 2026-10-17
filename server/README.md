@@ -16,7 +16,7 @@ pip install -e ./recognition -e "./server[dev]"
 export NOTBAD_API_KEY=你的服务商key
 export NOTBAD_MODEL=kimi-k3                 # 先用 notbad-recog probe 找出能看图的模型
 export NOTBAD_API_STYLE=openai              # 或 anthropic，见 recognition/README.md
-export NOTBAD_SOLVE_MODEL=deepseek-v4-pro   # 可选：解题用另一个模型，默认同 NOTBAD_MODEL
+# export NOTBAD_SOLVE_MODEL=...            # 可选：解题换一个模型，默认同 NOTBAD_MODEL；须能看图，且接口格式与 NOTBAD_API_STYLE 相同
 export NOTBAD_MEMBER_TOKENS=dev-token-1     # 会员 token，逗号分隔
 export NOTBAD_DAILY_LIMIT=200               # 每个 token 每日调用上限
 
