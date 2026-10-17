@@ -5,4 +5,5 @@ An app that spots wrong answers on exam papers and turns them into a mistake not
 
 - [路线图与技术选型](docs/roadmap.md)
 - [识别原型（切题 + 判错 + 评测）](recognition/README.md)
-- [iOS App（手动版 MVP）](ios/README.md)
+- [iOS App](ios/README.md)
+- [中转后端（会员模式）](server/README.md)

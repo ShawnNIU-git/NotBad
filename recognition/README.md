@@ -7,6 +7,9 @@ App 开发之前，先在电脑上验证"切题 + 判错"能做到多准。这�
 | `probe` | 用简单图形测试模型是否真能看图 |
 | `analyze` | 识别试卷照片，输出每页 JSON、单题裁剪图、带框的标注图 |
 | `evaluate` | 把模型输出和人工标注对比，算切题召回率、错题检测的精确率/召回率 |
+| `solve` | 读取 `analyze` 的输出，为错题生成标准答案和解析（写到 `out/solutions/`），用来评估解题模型 |
+
+提示词在仓库根目录的 [`shared/prompts/`](../shared/prompts)，App 和中转后端用的是同一份。改完提示词后运行 `scripts/sync_prompts.sh`，把副本同步到 iOS 核心库（测试会检查两边是否一致）。
 
 ## 安装
 
@@ -74,6 +77,14 @@ notbad-recog evaluate data/labels out/kimi-k3/preds --per-page
 - `segmentation.recall` 低说明切题漏题，`mean_iou` 低说明框不准，裁剪图会缺内容。
 - 结果按 `out/<模型名>/` 分目录存，换模型或改 `prompts.py` 后重跑，横向对比。
 - 打开 `out/.../overlay/` 看标注图（红框为判错，绿框为判对），定位出错原因。
+
+## 评估答案生成
+
+```bash
+notbad-recog solve out/kimi-k3 --model 另一个模型ID   # 不加 --model 则用 NOTBAD_MODEL；解题模型也必须能看图
+```
+
+逐题检查 `out/kimi-k3/solutions/*.json` 里的答案是否正确，记录正确率，作为选择解题模型的依据。
 
 ## 关于 OpenCode Go 订阅
 
