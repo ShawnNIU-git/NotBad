@@ -20,10 +20,11 @@ public struct RecognizedQuestion: Codable, Equatable, Sendable {
     public var teacherMark: TeacherMark
     public var isWrong: Bool
     public var confidence: Double
+    public var knowledgePoints: [String]
 
     public init(number: String, bbox: NormalizedBox, text: String = "", hasFigure: Bool = false,
                 studentAnswer: String = "", teacherMark: TeacherMark = .none,
-                isWrong: Bool = false, confidence: Double = 0) {
+                isWrong: Bool = false, confidence: Double = 0, knowledgePoints: [String] = []) {
         self.number = number
         self.bbox = bbox
         self.text = text
@@ -32,6 +33,7 @@ public struct RecognizedQuestion: Codable, Equatable, Sendable {
         self.teacherMark = teacherMark
         self.isWrong = isWrong
         self.confidence = confidence
+        self.knowledgePoints = knowledgePoints
     }
 
     enum CodingKeys: String, CodingKey {
@@ -41,6 +43,7 @@ public struct RecognizedQuestion: Codable, Equatable, Sendable {
         case teacherMark = "teacher_mark"
         case isWrong = "is_wrong"
         case confidence
+        case knowledgePoints = "knowledge_points"
     }
 
     // 模型输出常缺字段，缺了就用默认值
@@ -62,33 +65,97 @@ public struct RecognizedQuestion: Codable, Equatable, Sendable {
             studentAnswer: try c.decodeIfPresent(String.self, forKey: .studentAnswer) ?? "",
             teacherMark: try c.decodeIfPresent(TeacherMark.self, forKey: .teacherMark) ?? .none,
             isWrong: try c.decodeIfPresent(Bool.self, forKey: .isWrong) ?? false,
-            confidence: try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+            confidence: try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0,
+            knowledgePoints: decodeStringList(c, .knowledgePoints)
         )
     }
+}
+
+/// 模型偶尔把列表写成字符串或混入数字，宽松解析，取不到就返回空。
+func decodeStringList<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) -> [String] {
+    if let list = try? c.decodeIfPresent([String].self, forKey: key) {
+        return list.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+    return []
 }
 
 /// 一页试卷的识别结果。
 public struct RecognizedPage: Codable, Equatable, Sendable {
     public var subject: String
+    /// 试卷标题，识别不到为空
+    public var title: String
+    /// 单元测试/期中/期末/作业/练习/其他
+    public var paperType: String
+    public var grade: String
     public var questions: [RecognizedQuestion]
     public var notes: String
 
-    public init(subject: String = "", questions: [RecognizedQuestion] = [], notes: String = "") {
+    public init(subject: String = "", title: String = "", paperType: String = "", grade: String = "",
+                questions: [RecognizedQuestion] = [], notes: String = "") {
         self.subject = subject
+        self.title = title
+        self.paperType = paperType
+        self.grade = grade
         self.questions = questions
         self.notes = notes
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case subject, title, grade, questions, notes
+        case paperType = "paper_type"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func string(_ key: CodingKeys) -> String {
+            ((try? c.decodeIfPresent(String.self, forKey: key)) ?? nil)?.trimmingCharacters(in: .whitespaces) ?? ""
+        }
+        self.init(
+            subject: string(.subject),
+            title: string(.title),
+            paperType: string(.paperType),
+            grade: string(.grade),
+            questions: try c.decodeIfPresent([RecognizedQuestion].self, forKey: .questions) ?? [],
+            notes: string(.notes)
+        )
+    }
+
+    public var wrongQuestions: [RecognizedQuestion] { questions.filter(\.isWrong) }
+}
+
+/// 一道题的标准答案与解析。字段与 recognition/notbad_recog/schema.py 的 Solution 一致。
+public struct Solution: Codable, Equatable, Sendable {
+    public var answer: String
+    public var explanation: String
+    public var knowledgePoints: [String]
+    public var commonMistake: String
+    public var confidence: Double
+
+    public init(answer: String = "", explanation: String = "", knowledgePoints: [String] = [],
+                commonMistake: String = "", confidence: Double = 0) {
+        self.answer = answer
+        self.explanation = explanation
+        self.knowledgePoints = knowledgePoints
+        self.commonMistake = commonMistake
+        self.confidence = confidence
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case answer, explanation, confidence
+        case knowledgePoints = "knowledge_points"
+        case commonMistake = "common_mistake"
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            subject: try c.decodeIfPresent(String.self, forKey: .subject) ?? "",
-            questions: try c.decodeIfPresent([RecognizedQuestion].self, forKey: .questions) ?? [],
-            notes: try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+            answer: (try? c.decodeIfPresent(String.self, forKey: .answer) ?? "") ?? "",
+            explanation: (try? c.decodeIfPresent(String.self, forKey: .explanation) ?? "") ?? "",
+            knowledgePoints: decodeStringList(c, .knowledgePoints),
+            commonMistake: (try? c.decodeIfPresent(String.self, forKey: .commonMistake) ?? "") ?? "",
+            confidence: (try? c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0) ?? 0
         )
     }
-
-    public var wrongQuestions: [RecognizedQuestion] { questions.filter(\.isWrong) }
 }
 
 public enum RecognitionParseError: Error, Equatable {
@@ -116,5 +183,9 @@ public enum RecognitionParser {
 
     public static func parsePage(from text: String) throws -> RecognizedPage {
         try JSONDecoder().decode(RecognizedPage.self, from: extractJSON(from: text))
+    }
+
+    public static func parseSolution(from text: String) throws -> Solution {
+        try JSONDecoder().decode(Solution.self, from: extractJSON(from: text))
     }
 }

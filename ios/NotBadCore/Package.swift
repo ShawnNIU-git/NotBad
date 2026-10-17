@@ -10,7 +10,8 @@ let package = Package(
         .library(name: "NotBadCore", targets: ["NotBadCore"]),
     ],
     targets: [
-        .target(name: "NotBadCore"),
+        // Resources/prompts 是 shared/prompts 的副本，用 scripts/sync_prompts.sh 同步
+        .target(name: "NotBadCore", resources: [.copy("Resources/prompts")]),
         .testTarget(name: "NotBadCoreTests", dependencies: ["NotBadCore"]),
     ]
 )
