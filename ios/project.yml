@@ -15,7 +15,13 @@ targets:
     type: application
     platform: iOS
     sources:
-      - NotBad
+      - path: NotBad
+        excludes:
+          - "Resources/KaTeX/**"
+      # 公式渲染用的 KaTeX，按目录原样打包
+      - path: NotBad/Resources/KaTeX
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: NotBadCore
     scheme: {}
@@ -32,7 +38,11 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSCameraUsageDescription: 用于拍摄试卷，照片只保存在本机。
+        NSCameraUsageDescription: 用于拍摄试卷。
+        NSLocalNetworkUsageDescription: 开发调试时连接电脑上运行的识别服务。
+        NSAppTransportSecurity:
+          # 允许连接局域网里的开发服务器（http）；正式服务必须用 https
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.notbad  # 改成你自己的 Bundle ID

@@ -3,43 +3,43 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 
-/// 新建试卷：扫描或从相册导入 → 逐页框选错题 → 保存并后台 OCR。
+/// 添加试卷：拍照或导入 → 模型自动识别错题和试卷信息 → 确认（可勾选、补框）→ 保存。
+/// 保存后在后台识别文字（手动框）并生成答案。
 struct NewPaperView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Paper.createdAt, order: .reverse) private var papers: [Paper]
 
-    @State private var pages: [UIImage] = []
-    @State private var boxesByPage: [[NormalizedBox]] = []
-    @State private var currentPage = 0
-    @State private var subject: Subject = .math
-    @State private var title = ""
-
+    @State private var model: CaptureViewModel
     @State private var showingScanner = false
     @State private var pickerItems: [PhotosPickerItem] = []
-    @State private var isLoading = false
+    @State private var isLoadingPhotos = false
     @State private var errorMessage: String?
 
-    private var totalBoxes: Int { boxesByPage.reduce(0) { $0 + $1.count } }
+    /// existingPaper 不为空时，新页面直接追加到这份试卷。
+    init(existingPaper: Paper? = nil) {
+        _model = State(initialValue: CaptureViewModel(targetPaper: existingPaper))
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if pages.isEmpty {
+                if model.pages.isEmpty {
                     sourcePicker
                 } else {
-                    editor
+                    confirmation
                 }
             }
-            .navigationTitle(pages.isEmpty ? "添加试卷" : "框选错题")
+            .navigationTitle(model.pages.isEmpty ? "添加试卷" : "确认错题")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
-                if !pages.isEmpty {
+                if !model.pages.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存 \(totalBoxes) 题") { save() }
-                            .disabled(totalBoxes == 0)
+                        Button("保存 \(model.selectedCount) 题", action: save)
+                            .disabled(model.selectedCount == 0 || model.isAnalyzing)
                     }
                 }
             }
@@ -47,7 +47,7 @@ struct NewPaperView: View {
                 DocumentScannerView(
                     onFinish: { images in
                         showingScanner = false
-                        addPages(images)
+                        model.addPages(images)
                     },
                     onCancel: { showingScanner = false }
                 )
@@ -64,6 +64,8 @@ struct NewPaperView: View {
             }
         }
     }
+
+    // MARK: - 选择来源
 
     private var sourcePicker: some View {
         VStack(spacing: 16) {
@@ -84,8 +86,11 @@ struct NewPaperView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
-            if isLoading { ProgressView() }
-            Text("照片只保存在本机。拍摄前可以先遮住姓名和学校。")
+            if isLoadingPhotos { ProgressView() }
+
+            Text(model.usesModel
+                 ? "拍好后会自动找出错题，你只需要确认。拍照前建议遮住姓名和学校。"
+                 : "当前未开启自动识别（可在设置里开启），需要手动框选错题。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -94,56 +99,120 @@ struct NewPaperView: View {
         .padding(24)
     }
 
-    private var editor: some View {
+    // MARK: - 确认页
+
+    private var confirmation: some View {
         VStack(spacing: 8) {
+            paperInfo
+            pageView
+            pageControls
+        }
+    }
+
+    private var paperInfo: some View {
+        VStack(spacing: 6) {
+            Picker("保存到", selection: $model.targetPaper) {
+                Text("新建试卷").tag(Paper?.none)
+                ForEach(papers.prefix(20)) { paper in
+                    Text(paper.displayTitle).tag(Paper?.some(paper))
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             HStack {
-                Picker("学科", selection: $subject) {
+                Picker("学科", selection: edited(\.subject)) {
                     ForEach(Subject.allCases) { Text($0.title).tag($0) }
                 }
-                TextField("试卷名称（可选）", text: $title)
+                Picker("类型", selection: edited(\.paperType)) {
+                    Text("类型").tag("")
+                    ForEach(PaperType.all, id: \.self) { Text($0).tag($0) }
+                }
+                TextField("年级", text: edited(\.grade))
                     .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 80)
             }
-            .padding(.horizontal)
+            TextField("试卷标题（识别不到可留空）", text: edited(\.title))
+                .textFieldStyle(.roundedBorder)
+        }
+        .padding(.horizontal)
+        .onChange(of: model.targetPaper) { _, _ in model.targetPaperChanged() }
+    }
 
-            CropSelectionView(image: pages[currentPage], boxes: $boxesByPage[currentPage])
+    /// 用户手动改过的试卷信息，之后的页面识别结果不再覆盖。
+    private func edited<T>(_ keyPath: ReferenceWritableKeyPath<CaptureViewModel, T>) -> Binding<T> {
+        Binding(get: { model[keyPath: keyPath] },
+                set: { model[keyPath: keyPath] = $0; model.markPaperInfoEdited() })
+    }
+
+    @ViewBuilder
+    private var pageView: some View {
+        let index = model.currentPage
+        ZStack {
+            CropSelectionView(image: model.pages[index].image, boxes: $model.pages[index].boxes)
                 .padding(.horizontal, 4)
+            switch model.pages[index].status {
+            case .analyzing:
+                VStack(spacing: 8) {
+                    ProgressView()
+                    Text("正在识别错题…").font(.footnote)
+                }
+                .padding()
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            case let .failed(message):
+                VStack(spacing: 8) {
+                    Text("识别失败：\(message)").font(.footnote).multilineTextAlignment(.center)
+                    Button("重试") { model.retry(pageAt: index) }
+                    Text("也可以直接在图上手动框选").font(.caption).foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding()
+            case .done, .manual:
+                EmptyView()
+            }
+        }
+    }
 
+    private var pageControls: some View {
+        VStack(spacing: 4) {
             HStack {
                 Button {
-                    currentPage -= 1
+                    model.currentPage -= 1
                 } label: { Image(systemName: "chevron.left") }
-                    .disabled(currentPage == 0)
+                    .disabled(model.currentPage == 0)
                 Spacer()
-                Text("第 \(currentPage + 1)/\(pages.count) 页 · 本页 \(boxesByPage[currentPage].count) 题")
+                Text("第 \(model.currentPage + 1)/\(model.pages.count) 页 · 本页 \(model.pages[model.currentPage].boxes.filter(\.isSelected).count) 道错题")
                     .font(.footnote)
                 Spacer()
-                Button("撤销") { _ = boxesByPage[currentPage].popLast() }
-                    .disabled(boxesByPage[currentPage].isEmpty)
+                PhotosPicker(selection: $pickerItems, maxSelectionCount: 10, matching: .images) {
+                    Image(systemName: "plus.rectangle.on.rectangle")
+                }
                 Button {
-                    currentPage += 1
+                    model.currentPage += 1
                 } label: { Image(systemName: "chevron.right") }
-                    .disabled(currentPage == pages.count - 1)
+                    .disabled(model.currentPage == model.pages.count - 1)
             }
             .padding(.horizontal)
 
-            Text("在图上拖动框出错题，点框可删除")
+            Text(model.usesModel
+                 ? "红框会保存为错题，橙框请确认；点灰框改为错题，点红框取消；拖动可补框"
+                 : "在图上拖动框出错题，点框可删除")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
                 .padding(.bottom, 4)
         }
     }
 
-    private func addPages(_ images: [UIImage]) {
-        let normalized = images.map { $0.normalizedForStorage() }
-        pages.append(contentsOf: normalized)
-        boxesByPage.append(contentsOf: normalized.map { _ in [] })
-    }
+    // MARK: - 动作
 
     private func loadPickedPhotos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
-        isLoading = true
+        isLoadingPhotos = true
         defer {
-            isLoading = false
+            isLoadingPhotos = false
             pickerItems = []
         }
         var images: [UIImage] = []
@@ -156,40 +225,24 @@ struct NewPaperView: View {
         if images.isEmpty {
             errorMessage = "没有读取到图片"
         } else {
-            addPages(images)
+            model.addPages(images)
         }
     }
 
     private func save() {
         do {
-            let pageFiles = try pages.map { try ImageStore.save($0) }
-            let paper = Paper(subject: subject, title: title, pageFileNames: pageFiles)
-            modelContext.insert(paper)
-
-            var pending: [(Mistake, UIImage)] = []
-            var number = 0
-            for (pageIndex, boxes) in boxesByPage.enumerated() {
-                for box in boxes {
-                    number += 1
-                    guard let crop = pages[pageIndex].cropped(to: box) else { continue }
-                    let mistake = Mistake(subject: subject, questionNumber: "\(number)",
-                                          cropFileName: try ImageStore.save(crop),
-                                          pageFileName: pageFiles[pageIndex], box: box, source: .manual)
-                    modelContext.insert(mistake)
-                    mistake.paper = paper
-                    pending.append((mistake, crop))
-                }
-            }
-            try modelContext.save()
-            recognizeText(for: pending)
+            let created = try model.save(context: modelContext)
+            recognizeTextLocally(for: created.filter { $0.0.recognizedText.isEmpty })
+            AnswerGenerator.shared.run(context: modelContext)
             dismiss()
         } catch {
             errorMessage = "保存失败：\(error.localizedDescription)"
         }
     }
 
-    /// 保存后在后台逐题 OCR，识别完自动填入题干。
-    private func recognizeText(for items: [(Mistake, UIImage)]) {
+    /// 手动框的题没有模型识别的文字，用本机 OCR 补上。
+    private func recognizeTextLocally(for items: [(Mistake, UIImage)]) {
+        guard !items.isEmpty else { return }
         Task { @MainActor in
             for (mistake, crop) in items {
                 if let text = try? await TextRecognizer.recognize(crop), mistake.recognizedText.isEmpty {
